@@ -22,6 +22,11 @@ interface TasksViewProps {
   activeView: string
   onToggleTask: (id: string) => void
   onDeleteTask: (id: string) => void
+  onAddTask?: (task: Omit<Task, "id">) => void
+  onEditTask?: (task: Task) => void
+  onDuplicateTask?: (task: Task) => void
+  searchQuery?: string
+  selectedProject?: string
 }
 
 const priorityColors = {
@@ -30,8 +35,19 @@ const priorityColors = {
   low: "bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400",
 }
 
-export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: TasksViewProps) {
+export function TasksView({ 
+  tasks, 
+  activeView, 
+  onToggleTask, 
+  onDeleteTask, 
+  onAddTask,
+  onEditTask,
+  onDuplicateTask,
+  searchQuery = "",
+  selectedProject 
+}: TasksViewProps) {
   const [sortBy, setSortBy] = useState("dueDate")
+  const [quickAddInput, setQuickAddInput] = useState("")
 
   const viewTitles: Record<string, string> = {
     home: "Home",
@@ -40,9 +56,64 @@ export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: Tas
     upcoming: "Upcoming",
   }
 
-  const sortedTasks = [...tasks].sort((a, b) => {
+  // Filter tasks based on activeView
+  const filteredTasks = tasks.filter((task) => {
+    // Filter by search query
+    if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false
+    }
+
+    // Filter by selected project
+    if (selectedProject && task.project !== selectedProject) {
+      return false
+    }
+
+    // Filter by view
+    if (activeView === "inbox") {
+      return task.project === "Inbox"
+    }
+    
+    if (activeView === "today") {
+      if (!task.dueDate) return false
+      const today = new Date()
+      const taskDate = new Date(task.dueDate)
+      return (
+        taskDate.getDate() === today.getDate() &&
+        taskDate.getMonth() === today.getMonth() &&
+        taskDate.getFullYear() === today.getFullYear()
+      )
+    }
+    
+    if (activeView === "upcoming") {
+      if (!task.dueDate) return false
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const taskDate = new Date(task.dueDate)
+      taskDate.setHours(0, 0, 0, 0)
+      return taskDate >= today && task.completed === false
+    }
+
+    // Home view shows all tasks
+    return true
+  })
+
+  // Sort tasks with proper date handling
+  const sortedTasks = [...filteredTasks].sort((a, b) => {
     if (sortBy === "dueDate") {
-      return new Date(a.dueDate || "").getTime() - new Date(b.dueDate || "").getTime()
+      // Handle empty dates - put them at the end
+      if (!a.dueDate && !b.dueDate) return 0
+      if (!a.dueDate) return 1
+      if (!b.dueDate) return -1
+      
+      const dateA = new Date(a.dueDate)
+      const dateB = new Date(b.dueDate)
+      
+      // Check for invalid dates
+      if (isNaN(dateA.getTime()) && isNaN(dateB.getTime())) return 0
+      if (isNaN(dateA.getTime())) return 1
+      if (isNaN(dateB.getTime())) return -1
+      
+      return dateA.getTime() - dateB.getTime()
     }
     if (sortBy === "priority") {
       const priorityOrder = { high: 0, medium: 1, low: 2 }
@@ -52,14 +123,48 @@ export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: Tas
   })
 
   const formatDate = (date: string) => {
+    if (!date) return ""
+    
     const d = new Date(date)
+    // Check for invalid date
+    if (isNaN(d.getTime())) return ""
+    
     const today = new Date()
+    today.setHours(0, 0, 0, 0)
     const tomorrow = new Date(today)
     tomorrow.setDate(tomorrow.getDate() + 1)
+    const taskDate = new Date(d)
+    taskDate.setHours(0, 0, 0, 0)
 
-    if (d.toDateString() === today.toDateString()) return "Today"
-    if (d.toDateString() === tomorrow.toDateString()) return "Tomorrow"
+    if (taskDate.getTime() === today.getTime()) return "Today"
+    if (taskDate.getTime() === tomorrow.getTime()) return "Tomorrow"
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  }
+
+  const handleQuickAdd = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!quickAddInput.trim() || !onAddTask) return
+    
+    onAddTask({
+      title: quickAddInput.trim(),
+      completed: false,
+      dueDate: new Date().toISOString().split("T")[0],
+      project: selectedProject || "Inbox",
+      priority: "medium",
+    })
+    setQuickAddInput("")
+  }
+
+  const handleEdit = (task: Task) => {
+    if (onEditTask) {
+      onEditTask(task)
+    }
+  }
+
+  const handleDuplicate = (task: Task) => {
+    if (onDuplicateTask) {
+      onDuplicateTask(task)
+    }
   }
 
   return (
@@ -70,7 +175,7 @@ export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: Tas
           <h1 className="text-2xl font-bold text-foreground">
             {viewTitles[activeView as keyof typeof viewTitles] || "Tasks"}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{tasks.length} tasks</p>
+          <p className="text-sm text-muted-foreground mt-1">{sortedTasks.length} tasks</p>
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -90,7 +195,13 @@ export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: Tas
       {/* Tasks List */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="space-y-2 max-w-4xl">
-          {sortedTasks.map((task) => (
+          {sortedTasks.length === 0 ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground text-sm">No tasks found</p>
+              {searchQuery && <p className="text-muted-foreground text-xs mt-2">Try adjusting your search or filters</p>}
+            </div>
+          ) : (
+            sortedTasks.map((task) => (
             <div
               key={task.id}
               className={cn(
@@ -105,7 +216,9 @@ export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: Tas
                   {task.title}
                 </p>
                 <div className="flex items-center gap-2 mt-1.5">
-                  <span className="text-xs text-muted-foreground">{task.dueDate && formatDate(task.dueDate)}</span>
+                  {task.dueDate && (
+                    <span className="text-xs text-muted-foreground">{formatDate(task.dueDate)}</span>
+                  )}
                   <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded">{task.project}</span>
                   <span className={cn("text-xs px-2 py-0.5 rounded font-medium", priorityColors[task.priority])}>
                     {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
@@ -124,8 +237,12 @@ export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: Tas
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem>Edit</DropdownMenuItem>
-                  <DropdownMenuItem>Duplicate</DropdownMenuItem>
+                  {onEditTask && (
+                    <DropdownMenuItem onClick={() => handleEdit(task)}>Edit</DropdownMenuItem>
+                  )}
+                  {onDuplicateTask && (
+                    <DropdownMenuItem onClick={() => handleDuplicate(task)}>Duplicate</DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => onDeleteTask(task.id)} className="text-destructive">
                     <Trash2 className="w-4 h-4 mr-2" />
                     Delete
@@ -133,18 +250,23 @@ export function TasksView({ tasks, activeView, onToggleTask, onDeleteTask }: Tas
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
-          ))}
+          ))
+          )}
 
           {/* Add Task Input */}
-          <div className="mt-6 pt-4 border-t border-border">
-            <div className="flex items-center gap-3">
-              <Checkbox disabled />
-              <Input
-                placeholder="Add a task..."
-                className="bg-transparent border-0 focus-visible:ring-0 placeholder:text-muted-foreground"
-              />
+          {onAddTask && (
+            <div className="mt-6 pt-4 border-t border-border">
+              <form onSubmit={handleQuickAdd} className="flex items-center gap-3">
+                <Checkbox disabled />
+                <Input
+                  placeholder="Add a task..."
+                  value={quickAddInput}
+                  onChange={(e) => setQuickAddInput(e.target.value)}
+                  className="bg-transparent border-0 focus-visible:ring-0 placeholder:text-muted-foreground"
+                />
+              </form>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

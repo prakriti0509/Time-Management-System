@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,17 +16,42 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
+interface Task {
+  id?: string
+  title: string
+  completed: boolean
+  dueDate?: string
+  project: string
+  priority: "low" | "medium" | "high"
+}
+
 interface CreateTaskDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onAdd: (task: any) => void
+  onAdd: (task: Omit<Task, "id">) => void
+  editingTask?: Task | null
 }
 
-export function CreateTaskDialog({ open, onOpenChange, onAdd }: CreateTaskDialogProps) {
+export function CreateTaskDialog({ open, onOpenChange, onAdd, editingTask }: CreateTaskDialogProps) {
   const [title, setTitle] = useState("")
   const [dueDate, setDueDate] = useState("")
   const [project, setProject] = useState("Inbox")
-  const [priority, setPriority] = useState("medium")
+  const [priority, setPriority] = useState<"low" | "medium" | "high">("medium")
+
+  // Update form when editingTask changes
+  useEffect(() => {
+    if (editingTask) {
+      setTitle(editingTask.title)
+      setDueDate(editingTask.dueDate || "")
+      setProject(editingTask.project)
+      setPriority(editingTask.priority)
+    } else {
+      setTitle("")
+      setDueDate("")
+      setProject("Inbox")
+      setPriority("medium")
+    }
+  }, [editingTask, open])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,21 +62,23 @@ export function CreateTaskDialog({ open, onOpenChange, onAdd }: CreateTaskDialog
       dueDate: dueDate || new Date().toISOString().split("T")[0],
       project,
       priority,
-      completed: false,
+      completed: editingTask?.completed || false,
     })
 
-    setTitle("")
-    setDueDate("")
-    setProject("Inbox")
-    setPriority("medium")
+    if (!editingTask) {
+      setTitle("")
+      setDueDate("")
+      setProject("Inbox")
+      setPriority("medium")
+    }
   }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create New Task</DialogTitle>
-          <DialogDescription>Add a new task to your list</DialogDescription>
+          <DialogTitle>{editingTask ? "Edit Task" : "Create New Task"}</DialogTitle>
+          <DialogDescription>{editingTask ? "Update task details" : "Add a new task to your list"}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -104,7 +131,7 @@ export function CreateTaskDialog({ open, onOpenChange, onAdd }: CreateTaskDialog
               Cancel
             </Button>
             <Button type="submit" className="bg-primary text-primary-foreground">
-              Create Task
+              {editingTask ? "Update Task" : "Create Task"}
             </Button>
           </DialogFooter>
         </form>

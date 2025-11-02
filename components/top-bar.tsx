@@ -8,6 +8,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 interface TopBarProps {
   onCreateTask: () => void
   activeView: string
+  searchQuery?: string
+  onSearchChange?: (query: string) => void
 }
 
 const viewTitles: Record<string, string> = {
@@ -19,14 +21,19 @@ const viewTitles: Record<string, string> = {
   labels: "Labels",
 }
 
-export function TopBar({ onCreateTask, activeView }: TopBarProps) {
+export function TopBar({ onCreateTask, activeView, searchQuery = "", onSearchChange }: TopBarProps) {
   return (
     <div className="h-16 border-b border-border bg-card flex items-center justify-between px-6 gap-4">
       {/* Left side - Search */}
       <div className="flex-1 max-w-md">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Search tasks..." className="pl-10 bg-muted border-0 text-sm" />
+          <Input 
+            placeholder="Search tasks..." 
+            className="pl-10 bg-muted border-0 text-sm" 
+            value={searchQuery}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+          />
         </div>
       </div>
 

@@ -19,9 +19,11 @@ const collapsibleItems = [
 interface SidebarProps {
   activeView: string
   setActiveView: (view: string) => void
+  selectedProject?: string
+  onProjectClick?: (project: string) => void
 }
 
-export function Sidebar({ activeView, setActiveView }: SidebarProps) {
+export function Sidebar({ activeView, setActiveView, selectedProject, onProjectClick }: SidebarProps) {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     projects: true,
     labels: true,
@@ -90,7 +92,13 @@ export function Sidebar({ activeView, setActiveView }: SidebarProps) {
                   {section.items.map((item) => (
                     <button
                       key={item}
-                      className="w-full text-left px-3 py-1 text-xs text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors"
+                      onClick={() => section.id === "projects" && onProjectClick?.(item)}
+                      className={cn(
+                        "w-full text-left px-3 py-1 text-xs transition-colors rounded",
+                        section.id === "projects" && selectedProject === item
+                          ? "text-sidebar-primary bg-sidebar-accent"
+                          : "text-sidebar-foreground/70 hover:text-sidebar-foreground"
+                      )}
                     >
                       {item}
                     </button>
